@@ -1,21 +1,19 @@
-const screens = {
-  start: document.getElementById('screen-start'),
-  stage: document.getElementById('screen-stage'),
-  report: document.getElementById('screen-report'),
-};
-const currentStepLabel = document.getElementById('current-step');
-const totalStepLabel = document.getElementById('total-step');
-const stageTitle = document.getElementById('stage-title');
-const stageDescription = document.getElementById('stage-description');
-const stageForm = document.getElementById('stage-form');
-const prevBtn = document.getElementById('prev-btn');
-const nextBtn = document.getElementById('next-btn');
-const reportBreakdown = document.getElementById('report-breakdown');
-const reportTotal = document.getElementById('report-total');
-const endingMessage = document.getElementById('ending-message');
-const restartBtn = document.getElementById('restart-btn');
+/**
+ * Carbon Footprint Simulator - Main Application
+ * Secure, efficient, and well-structured game logic
+ */
 
-const values = {
+// ============================================================================
+// CONFIGURATION & CONSTANTS
+// ============================================================================
+
+const CONFIG = {
+  maxDuration: { hours: 4, minutes: 30, seconds: 0 },
+  printingPageStep: 5,
+  decimalPlaces: 2,
+};
+
+const CARBON_VALUES = {
   shower: { cold: 0.05, hot: 0.80 },
   breakfast: { toast: 0.15, eggs: 0.40, coffee: 0.20, rice: 0.60 },
   appliances: { fan: 0.05, light: 0.02, microwave: 0.12, kettle: 0.10 },
@@ -29,7 +27,160 @@ const values = {
   waste: { segregated: 0.10, mixed: 0.50, excess: 1.00 },
 };
 
-const state = {
+const ENDINGS = {
+  greenHero: (isFemale) => ({
+    title: isFemale ? 'Green Woman' : 'Green Man',
+    message: 'Excellent! Your choices helped reduce environmental impact and promote sustainable living.',
+    threshold: 8,
+  }),
+  ecoLearner: {
+    title: 'Eco Learner',
+    message: 'Good effort! You understand sustainability, but there is still room for improvement.',
+    threshold: 15,
+  },
+  carbonLover: {
+    title: 'Carbon Lover',
+    message: 'Your lifestyle generated a high carbon footprint today. Try greener alternatives next time.',
+    threshold: Infinity,
+  },
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Safely escape HTML to prevent XSS attacks
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped HTML-safe text
+ */
+function escapeHtml(text) {
+  if (typeof text !== 'string') return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Parse time duration string (hh:mm:ss) to total seconds
+ * @param {string} value - Time string in format hh:mm:ss
+ * @returns {number} Total seconds
+ */
+function parseDurationToSeconds(value) {
+  if (!value || typeof value !== 'string') return 0;
+  
+  try {
+    const parts = value.split(':').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return 0;
+    
+    const [hours, minutes, seconds] = parts;
+    // Validate ranges
+    if (hours < 0 || minutes < 0 || minutes >= 60 || seconds < 0 || seconds >= 60) return 0;
+    
+    return hours * 3600 + minutes * 60 + seconds;
+  } catch (e) {
+    console.warn('Invalid duration format:', value);
+    return 0;
+  }
+}
+
+/**
+ * Parse duration to minutes
+ * @param {string} value - Time string in format hh:mm:ss
+ * @returns {number} Total minutes
+ */
+function parseDurationToMinutes(value) {
+  return parseDurationToSeconds(value) / 60;
+}
+
+/**
+ * Parse duration to hours
+ * @param {string} value - Time string in format hh:mm:ss
+ * @returns {number} Total hours
+ */
+function parseDurationToHours(value) {
+  return parseDurationToSeconds(value) / 3600;
+}
+
+/**
+ * Safely get form value with validation
+ * @param {FormData} form - Form data object
+ * @param {string} name - Field name
+ * @param {any} defaultValue - Default value if not found
+ * @returns {any} Form value or default
+ */
+function getSafeFormValue(form, name, defaultValue) {
+  try {
+    const value = form.get(name);
+    return value !== null ? value : defaultValue;
+  } catch (e) {
+    console.warn(`Failed to get form value for ${name}:`, e);
+    return defaultValue;
+  }
+}
+
+/**
+ * Validate and sanitize numeric input
+ * @param {any} value - Value to validate
+ * @param {number} min - Minimum value
+ * @param {number} max - Maximum value
+ * @param {number} defaultValue - Default if invalid
+ * @returns {number} Validated number
+ */
+function validateNumber(value, min = 0, max = Infinity, defaultValue = 0) {
+  const num = Number(value);
+  if (isNaN(num)) return defaultValue;
+  return Math.min(Math.max(num, min), max);
+}
+
+/**
+ * Format label text from camelCase
+ * @param {string} text - Text to format
+ * @returns {string} Formatted label
+ */
+function formatLabel(text) {
+  if (typeof text !== 'string') return '';
+  return text.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
+}
+
+// ============================================================================
+// DOM CACHE & STATE MANAGEMENT
+// ============================================================================
+
+const DOM = {
+  screens: {
+    start: document.getElementById('screen-start'),
+    stage: document.getElementById('screen-stage'),
+    report: document.getElementById('screen-report'),
+  },
+  labels: {
+    currentStep: document.getElementById('current-step'),
+    totalSteps: document.getElementById('total-step'),
+    stageTitle: document.getElementById('stage-title'),
+    stageDescription: document.getElementById('stage-description'),
+  },
+  elements: {
+    stageForm: document.getElementById('stage-form'),
+    prevBtn: document.getElementById('prev-btn'),
+    nextBtn: document.getElementById('next-btn'),
+    reportBreakdown: document.getElementById('report-breakdown'),
+    reportTotal: document.getElementById('report-total'),
+    endingMessage: document.getElementById('ending-message'),
+    restartBtn: document.getElementById('restart-btn'),
+  },
+};
+
+// Validate all required DOM elements exist
+function validateDOM() {
+  const allElements = { ...DOM.screens, ...DOM.labels, ...DOM.elements };
+  for (const [key, el] of Object.entries(allElements)) {
+    if (!el) {
+      throw new Error(`Missing required DOM element: ${key}`);
+    }
+  }
+}
+
+const INITIAL_STATE = {
   character: 'male',
   shower: 'cold',
   breakfast: { toast: false, eggs: false, coffee: false, rice: false },
@@ -55,7 +206,11 @@ const state = {
   waste: 'segregated',
 };
 
-const stages = [
+let appState = { ...INITIAL_STATE };
+let currentStageIndex = 0;
+let cachedTotals = null;
+
+const STAGES = [
   { id: 'wake', title: 'Wake Up', description: 'Your day begins. Prepare for a sustainable routine as you get ready to live a typical office day.', action: 'next' },
   { id: 'shower', title: 'Morning Shower', description: 'Choose a shower type for the morning.', action: 'next' },
   { id: 'breakfast', title: 'Breakfast', description: 'Pick the breakfast items you want to eat today. You may choose more than one.', action: 'next' },
@@ -70,67 +225,152 @@ const stages = [
   { id: 'sleep', title: 'Sleep', description: 'You end the day and prepare to see your carbon report.', action: 'finish' },
 ];
 
-let currentStageIndex = 0;
+// ============================================================================
+// UI RENDERING HELPERS
+// ============================================================================
 
-function showScreen(name) {
-  Object.values(screens).forEach((screen) => screen.classList.remove('active'));
-  screens[name].classList.add('active');
-}
-
-function renderOptionCard(option, inputHtml) {
+/**
+ * Create a reusable option card with proper HTML escaping
+ * @param {object} option - Option object with label and detail
+ * @param {string} inputHtml - Raw HTML for input element
+ * @returns {string} Safe HTML string
+ */
+function createOptionCard(option, inputHtml) {
+  const label = escapeHtml(option.label);
+  const detail = escapeHtml(option.detail);
   return `
     <label class="option-card">
       ${inputHtml}
       <div class="option-data">
-        <strong>${option.label}</strong>
-        <span>${option.detail}</span>
+        <strong>${label}</strong>
+        <span>${detail}</span>
       </div>
     </label>
   `;
 }
 
-function parseDurationToSeconds(value) {
-  if (!value) return 0;
-  const [hours = '0', minutes = '0', seconds = '0'] = value.split(':');
-  return Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds);
+/**
+ * Create radio or checkbox inputs for multiple options
+ * @param {array} options - Options array
+ * @param {string} type - Input type (radio or checkbox)
+ * @param {string} currentValue - Currently selected value(s)
+ * @returns {string} Safe HTML string
+ */
+function createInputOptions(options, type, currentValue) {
+  return options
+    .map((option) => {
+      const value = escapeHtml(option.value || option.name);
+      const checked = type === 'radio' 
+        ? (currentValue === value ? 'checked' : '')
+        : (currentValue[value] ? 'checked' : '');
+      
+      const inputHtml = `<input type="${type}" name="${escapeHtml(option.name || 'option')}" value="${value}" ${checked} required>`;
+      return createOptionCard(option, inputHtml);
+    })
+    .join('');
 }
 
-function parseDurationToMinutes(value) {
-  return parseDurationToSeconds(value) / 60;
+/**
+ * Create a time input field with label
+ * @param {string} label - Field label
+ * @param {string} name - Input name attribute
+ * @param {string} value - Current value
+ * @param {string} hint - Help text
+ * @returns {string} Safe HTML string
+ */
+function createTimeInput(label, name, value, hint = '') {
+  const safeLabel = escapeHtml(label);
+  const safeValue = escapeHtml(value);
+  const safeHint = escapeHtml(hint);
+  return `
+    <label>${safeLabel}
+      <input type="time" name="${escapeHtml(name)}" step="1" value="${safeValue}" min="00:00:00" max="04:00:00">
+      ${safeHint ? `<span class="small">${safeHint}</span>` : ''}
+    </label>
+  `;
 }
 
-function parseDurationToHours(value) {
-  return parseDurationToSeconds(value) / 3600;
+/**
+ * Create a number input field with label
+ * @param {string} label - Field label
+ * @param {string} name - Input name attribute
+ * @param {number} value - Current value
+ * @param {object} options - Input options
+ * @returns {string} Safe HTML string
+ */
+function createNumberInput(label, name, value, options = {}) {
+  const safeLabel = escapeHtml(label);
+  const min = validateNumber(options.min, 0);
+  const step = validateNumber(options.step, 1);
+  const safeHint = options.hint ? escapeHtml(options.hint) : '';
+  
+  return `
+    <label>${safeLabel}
+      <input type="number" name="${escapeHtml(name)}" min="${min}" step="${step}" value="${value}" placeholder="0">
+      ${safeHint ? `<span class="small">${safeHint}</span>` : ''}
+    </label>
+  `;
 }
 
+// ============================================================================
+// STAGE RENDERING
+// ============================================================================
+
+/**
+ * Render the current stage based on stage ID
+ */
 function renderStage() {
-  const stage = stages[currentStageIndex];
-  currentStepLabel.textContent = currentStageIndex + 1;
-  totalStepLabel.textContent = stages.length;
-  stageTitle.textContent = stage.title;
-  stageDescription.textContent = stage.description;
-  prevBtn.style.display = currentStageIndex === 0 ? 'none' : 'inline-flex';
-  nextBtn.textContent = stage.action === 'finish' ? 'Finish Day' : 'Next';
+  const stage = STAGES[currentStageIndex];
+  if (!stage) {
+    console.error('Invalid stage index:', currentStageIndex);
+    return;
+  }
 
+  // Update UI labels
+  DOM.labels.currentStep.textContent = String(currentStageIndex + 1);
+  DOM.labels.totalSteps.textContent = String(STAGES.length);
+  DOM.labels.stageTitle.textContent = escapeHtml(stage.title);
+  DOM.labels.stageDescription.textContent = escapeHtml(stage.description);
+  
+  // Update button visibility
+  DOM.elements.prevBtn.style.display = currentStageIndex === 0 ? 'none' : 'inline-flex';
+  DOM.elements.nextBtn.textContent = stage.action === 'finish' ? 'Finish Day' : 'Next';
+
+  // Clear cache when rendering new stage
+  cachedTotals = null;
+
+  // Render stage-specific content
   let content = '';
+  try {
+    content = renderStageContent(stage);
+  } catch (e) {
+    console.error('Error rendering stage content:', e);
+    content = '<div class="field-group"><p>Error loading stage. Please refresh the page.</p></div>';
+  }
 
+  // Use textContent for safety, then add safe HTML afterward
+  DOM.elements.stageForm.innerHTML = content;
+}
+
+/**
+ * Render content for a specific stage
+ * @param {object} stage - Stage configuration
+ * @returns {string} Safe HTML string
+ */
+function renderStageContent(stage) {
   switch (stage.id) {
     case 'wake':
-      content = '<div class="field-group"><p>Welcome to a short, 2–3 minute day of choices and carbon tracking.</p></div>';
-      break;
+      return '<div class="field-group"><p>Welcome to a short, 2–3 minute day of choices and carbon tracking.</p></div>';
+
     case 'shower': {
       const options = [
         { value: 'cold', label: 'Cold Shower', detail: '0.05 kg CO₂e' },
         { value: 'hot', label: 'Hot Shower', detail: '0.80 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.shower === option.value ? 'checked' : '';
-          return renderOptionCard(option, `<input type="radio" name="shower" value="${option.value}" ${checked} required>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'radio', appState.shower);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'breakfast': {
       const options = [
         { name: 'toast', label: 'Toast', detail: '0.15 kg CO₂e' },
@@ -138,35 +378,20 @@ function renderStage() {
         { name: 'coffee', label: 'Coffee', detail: '0.20 kg CO₂e' },
         { name: 'rice', label: 'Rice', detail: '0.60 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.breakfast[option.name] ? 'checked' : '';
-          return renderOptionCard(option, `<input type="checkbox" name="${option.name}" value="on" ${checked}>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'checkbox', appState.breakfast);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'appliances': {
-      content = `<div class="field-group">
-          <label>Fan Usage (hh:mm:ss)
-            <input type="time" name="fanDuration" step="1" value="${state.appliances.fanDuration}" min="00:00:00" max="04:00:00">
-            <span class="small">Each hour uses 0.05 kg CO₂e.</span>
-          </label>
-          <label>Light Usage (hh:mm:ss)
-            <input type="time" name="lightDuration" step="1" value="${state.appliances.lightDuration}" min="00:00:00" max="04:00:00">
-            <span class="small">Each hour uses 0.02 kg CO₂e.</span>
-          </label>
-          <label>Microwave Usage (hh:mm:ss)
-            <input type="time" name="microwaveDuration" step="1" value="${state.appliances.microwaveDuration}" min="00:00:00" max="00:30:00">
-            <span class="small">Each 10 minutes uses 0.12 kg CO₂e.</span>
-          </label>
-          <label>Kettle Usage (hh:mm:ss)
-            <input type="time" name="kettleDuration" step="1" value="${state.appliances.kettleDuration}" min="00:00:00" max="00:30:00">
-            <span class="small">Each 10 minutes uses 0.10 kg CO₂e.</span>
-          </label>
-        </div>`;
-      break;
+      const durations = appState.appliances;
+      return `<div class="field-group">
+        ${createTimeInput('Fan Usage (hh:mm:ss)', 'fanDuration', durations.fanDuration, 'Each hour uses 0.05 kg CO₂e.')}
+        ${createTimeInput('Light Usage (hh:mm:ss)', 'lightDuration', durations.lightDuration, 'Each hour uses 0.02 kg CO₂e.')}
+        ${createTimeInput('Microwave Usage (hh:mm:ss)', 'microwaveDuration', durations.microwaveDuration, 'Each 10 minutes uses 0.12 kg CO₂e.')}
+        ${createTimeInput('Kettle Usage (hh:mm:ss)', 'kettleDuration', durations.kettleDuration, 'Each 10 minutes uses 0.10 kg CO₂e.')}
+      </div>`;
     }
+
     case 'commute': {
       const options = [
         { value: 'car', label: 'Car', detail: '2.50 kg CO₂e' },
@@ -175,42 +400,25 @@ function renderStage() {
         { value: 'bicycle', label: 'Bicycle', detail: '0.00 kg CO₂e' },
         { value: 'walking', label: 'Walking', detail: '0.00 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.commute === option.value ? 'checked' : '';
-          return renderOptionCard(option, `<input type="radio" name="commute" value="${option.value}" ${checked} required>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'radio', appState.commute);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'office': {
-      const options = [
+      const checkboxOptions = [
         { name: 'computer', label: 'Office Computer Use', detail: '0.40 kg CO₂e' },
         { name: 'internet', label: 'Internet Use', detail: '0.20 kg CO₂e' },
         { name: 'coffee', label: 'One Cup Coffee', detail: '0.20 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.office[option.name] ? 'checked' : '';
-          return renderOptionCard(option, `<input type="checkbox" name="${option.name}" value="on" ${checked}>`);
-        })
-        .join('')}</div></div>
+      const inputs = createInputOptions(checkboxOptions, 'checkbox', appState.office);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>
         <div class="field-group">
-          <label>Air Conditioner Use (hh:mm:ss)
-            <input type="time" name="acDuration" step="1" value="${state.office.acDuration}" min="00:00:00" max="04:00:00">
-            <span class="small">Each hour uses 0.60 kg CO₂e.</span>
-          </label>
-          <label>Heater Use (hh:mm:ss)
-            <input type="time" name="heaterDuration" step="1" value="${state.office.heaterDuration}" min="00:00:00" max="04:00:00">
-            <span class="small">Each hour uses 1.00 kg CO₂e.</span>
-          </label>
-          <label>Printing (pages)
-            <input type="number" name="printingPages" min="0" step="5" value="${state.office.printingPages}" placeholder="0">
-            <span class="small">Every 5 pages = 0.05 kg CO₂e</span>
-          </label>
+          ${createTimeInput('Air Conditioner Use (hh:mm:ss)', 'acDuration', appState.office.acDuration, 'Each hour uses 0.60 kg CO₂e.')}
+          ${createTimeInput('Heater Use (hh:mm:ss)', 'heaterDuration', appState.office.heaterDuration, 'Each hour uses 1.00 kg CO₂e.')}
+          ${createNumberInput('Printing (pages)', 'printingPages', appState.office.printingPages, { min: 0, step: 5, hint: 'Every 5 pages = 0.05 kg CO₂e' })}
         </div>`;
-      break;
     }
+
     case 'lunch': {
       const options = [
         { name: 'rice', label: 'Rice', detail: '0.60 kg CO₂e' },
@@ -218,14 +426,10 @@ function renderStage() {
         { name: 'drink', label: 'Packaged Drink', detail: '0.30 kg CO₂e' },
         { name: 'vegetables', label: 'Vegetables', detail: '0.20 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.lunch[option.name] ? 'checked' : '';
-          return renderOptionCard(option, `<input type="checkbox" name="${option.name}" value="on" ${checked}>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'checkbox', appState.lunch);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'shopping': {
       const options = [
         { value: 'none', label: 'No Purchase', detail: '0.00 kg CO₂e' },
@@ -233,14 +437,10 @@ function renderStage() {
         { value: 'clothing', label: 'New Clothing', detail: '2.00 kg CO₂e' },
         { value: 'gadget', label: 'Electronic Gadget', detail: '15.00 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.shopping === option.value ? 'checked' : '';
-          return renderOptionCard(option, `<input type="radio" name="shopping" value="${option.value}" ${checked} required>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'radio', appState.shopping);
+      return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'dinner': {
       const cookingOptions = [
         { value: 'home', label: 'Home Cooking', detail: '0.50 kg CO₂e' },
@@ -253,225 +453,367 @@ function renderStage() {
         { name: 'chicken', label: 'Chicken', detail: '1.60 kg CO₂e' },
         { name: 'packaged', label: 'Packaged Food', detail: '2.00 kg CO₂e' },
       ];
-      content = `<div class="option-group"><div class="option-row">${cookingOptions
-        .map((option) => {
-          const checked = state.dinner.cooking === option.value ? 'checked' : '';
-          return renderOptionCard(option, `<input type="radio" name="dinnerCooking" value="${option.value}" ${checked} required>`);
-        })
-        .join('')}</div></div>
-        <div class="option-group"><div class="option-row">${foodOptions
-          .map((option) => {
-            const checked = state.dinner.food[option.name] ? 'checked' : '';
-            return renderOptionCard(option, `<input type="checkbox" name="${option.name}" value="on" ${checked}>`);
-          })
-          .join('')}</div></div>`;
-      break;
+      const cookingInputs = createInputOptions(cookingOptions, 'radio', appState.dinner.cooking);
+      const foodInputs = createInputOptions(foodOptions, 'checkbox', appState.dinner.food);
+      return `<div class="option-group"><div class="option-row">${cookingInputs}</div></div>
+        <div class="option-group"><div class="option-row">${foodInputs}</div></div>`;
     }
+
     case 'tv': {
-      content = `<div class="field-group">
-          <label>TV Watching (hh:mm:ss)
-            <input type="time" name="tvDuration" step="1" value="${state.tvDuration}" min="00:00:00" max="04:00:00">
-            <span class="small">Each hour of TV adds 0.08 kg CO₂e.</span>
-          </label>
-        </div>`;
-      break;
+      return `<div class="field-group">
+        ${createTimeInput('TV Watching (hh:mm:ss)', 'tvDuration', appState.tvDuration, 'Each hour of TV adds 0.08 kg CO₂e.')}
+      </div>`;
     }
+
     case 'waste': {
-      const packagedCount = Number(state.lunch.drink) + Number(state.dinner.food.packaged);
-      const suggestion = packagedCount > 0 ? 'We recommend properly segregated waste to reduce the carbon impact of packaged goods.' : 'Properly segregated waste is the best choice after a low-packaged day.';
+      const hasPackaged = appState.lunch.drink || appState.dinner.food.packaged;
+      const suggestion = hasPackaged 
+        ? 'We recommend properly segregated waste to reduce the carbon impact of packaged goods.'
+        : 'Properly segregated waste is the best choice after a low-packaged day.';
+      
       const options = [
         { value: 'segregated', label: 'Properly Segregated Waste', detail: '0.10 kg CO₂e' },
         { value: 'mixed', label: 'Mixed Waste', detail: '0.50 kg CO₂e' },
         { value: 'excess', label: 'Excess Food Waste', detail: '1.00 kg CO₂e' },
       ];
-      content = `<div class="field-group"><p>${suggestion}</p></div><div class="option-group"><div class="option-row">${options
-        .map((option) => {
-          const checked = state.waste === option.value ? 'checked' : '';
-          return renderOptionCard(option, `<input type="radio" name="waste" value="${option.value}" ${checked} required>`);
-        })
-        .join('')}</div></div>`;
-      break;
+      const inputs = createInputOptions(options, 'radio', appState.waste);
+      return `<div class="field-group"><p>${escapeHtml(suggestion)}</p></div>
+        <div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
+
     case 'sleep':
-      content = '<div class="field-group"><p>Great job! You are ready to end the day and see how your choices affected your carbon footprint.</p></div>';
-      break;
-    default:
-      content = '<div class="field-group"><p>Use the controls below to navigate through the day.</p></div>';
-  }
+      return '<div class="field-group"><p>Great job! You are ready to end the day and see how your choices affected your carbon footprint.</p></div>';
 
-  stageForm.innerHTML = content;
+    default:
+      return '<div class="field-group"><p>Use the controls below to navigate through the day.</p></div>';
+  }
 }
 
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+
+/**
+ * Read and validate form values for the current stage
+ */
 function readStageValues() {
-  const stage = stages[currentStageIndex];
-  const form = new FormData(stageForm);
-  switch (stage.id) {
-    case 'shower':
-      state.shower = form.get('shower') || state.shower;
-      break;
-    case 'breakfast':
-      Object.keys(state.breakfast).forEach((name) => {
-        state.breakfast[name] = stageForm.querySelector(`input[name="${name}"]`).checked;
-      });
-      break;
-    case 'appliances':
-      state.appliances.fanDuration = form.get('fanDuration') || state.appliances.fanDuration;
-      state.appliances.lightDuration = form.get('lightDuration') || state.appliances.lightDuration;
-      state.appliances.microwaveDuration = form.get('microwaveDuration') || state.appliances.microwaveDuration;
-      state.appliances.kettleDuration = form.get('kettleDuration') || state.appliances.kettleDuration;
-      break;
-    case 'commute':
-      state.commute = form.get('commute') || state.commute;
-      break;
-    case 'office':
-      state.office.computer = stageForm.querySelector('input[name="computer"]').checked;
-      state.office.internet = stageForm.querySelector('input[name="internet"]').checked;
-      state.office.coffee = stageForm.querySelector('input[name="coffee"]').checked;
-      state.office.acDuration = form.get('acDuration') || state.office.acDuration;
-      state.office.heaterDuration = form.get('heaterDuration') || state.office.heaterDuration;
-      state.office.printingPages = Number(form.get('printingPages') || 0);
-      break;
-    case 'lunch':
-      Object.keys(state.lunch).forEach((name) => {
-        state.lunch[name] = stageForm.querySelector(`input[name="${name}"]`).checked;
-      });
-      break;
-    case 'shopping':
-      state.shopping = form.get('shopping') || state.shopping;
-      break;
-    case 'dinner':
-      state.dinner.cooking = form.get('dinnerCooking') || state.dinner.cooking;
-      Object.keys(state.dinner.food).forEach((name) => {
-        state.dinner.food[name] = stageForm.querySelector(`input[name="${name}"]`).checked;
-      });
-      break;
-    case 'tv':
-      state.tvDuration = form.get('tvDuration') || state.tvDuration;
-      break;
-    case 'waste':
-      state.waste = form.get('waste') || state.waste;
-      break;
-    default:
-      break;
+  const stage = STAGES[currentStageIndex];
+  if (!stage) return;
+
+  const form = new FormData(DOM.elements.stageForm);
+
+  try {
+    switch (stage.id) {
+      case 'shower':
+        appState.shower = getSafeFormValue(form, 'shower', appState.shower);
+        break;
+
+      case 'breakfast':
+        Object.keys(appState.breakfast).forEach((name) => {
+          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
+          if (el) appState.breakfast[name] = el.checked;
+        });
+        break;
+
+      case 'appliances':
+        appState.appliances.fanDuration = getSafeFormValue(form, 'fanDuration', appState.appliances.fanDuration);
+        appState.appliances.lightDuration = getSafeFormValue(form, 'lightDuration', appState.appliances.lightDuration);
+        appState.appliances.microwaveDuration = getSafeFormValue(form, 'microwaveDuration', appState.appliances.microwaveDuration);
+        appState.appliances.kettleDuration = getSafeFormValue(form, 'kettleDuration', appState.appliances.kettleDuration);
+        break;
+
+      case 'commute':
+        appState.commute = getSafeFormValue(form, 'commute', appState.commute);
+        break;
+
+      case 'office':
+        appState.office.computer = DOM.elements.stageForm.querySelector('input[name="computer"]')?.checked || false;
+        appState.office.internet = DOM.elements.stageForm.querySelector('input[name="internet"]')?.checked || false;
+        appState.office.coffee = DOM.elements.stageForm.querySelector('input[name="coffee"]')?.checked || false;
+        appState.office.acDuration = getSafeFormValue(form, 'acDuration', appState.office.acDuration);
+        appState.office.heaterDuration = getSafeFormValue(form, 'heaterDuration', appState.office.heaterDuration);
+        appState.office.printingPages = validateNumber(getSafeFormValue(form, 'printingPages', 0), 0, 1000);
+        break;
+
+      case 'lunch':
+        Object.keys(appState.lunch).forEach((name) => {
+          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
+          if (el) appState.lunch[name] = el.checked;
+        });
+        break;
+
+      case 'shopping':
+        appState.shopping = getSafeFormValue(form, 'shopping', appState.shopping);
+        break;
+
+      case 'dinner':
+        appState.dinner.cooking = getSafeFormValue(form, 'dinnerCooking', appState.dinner.cooking);
+        Object.keys(appState.dinner.food).forEach((name) => {
+          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
+          if (el) appState.dinner.food[name] = el.checked;
+        });
+        break;
+
+      case 'tv':
+        appState.tvDuration = getSafeFormValue(form, 'tvDuration', appState.tvDuration);
+        break;
+
+      case 'waste':
+        appState.waste = getSafeFormValue(form, 'waste', appState.waste);
+        break;
+
+      default:
+        break;
+    }
+
+    // Invalidate cache when state changes
+    cachedTotals = null;
+  } catch (e) {
+    console.error('Error reading stage values:', e);
   }
 }
 
+// ============================================================================
+// CARBON CALCULATION
+// ============================================================================
+
+/**
+ * Calculate category totals safely
+ */
 function computeTotals() {
-  const breakfastTotal = Object.entries(state.breakfast).reduce((sum, [key, checked]) => {
-    return sum + (checked ? values.breakfast[key] : 0);
-  }, 0);
-  const appliancesTotal = parseDurationToHours(state.appliances.fanDuration) * values.appliances.fan
-    + parseDurationToHours(state.appliances.lightDuration) * values.appliances.light
-    + (parseDurationToMinutes(state.appliances.microwaveDuration) / 10) * values.appliances.microwave
-    + (parseDurationToMinutes(state.appliances.kettleDuration) / 10) * values.appliances.kettle;
-  const officeTotal = (state.office.computer ? values.office.computer : 0)
-    + (state.office.internet ? values.office.internet : 0)
-    + (state.office.coffee ? values.office.coffee : 0)
-    + state.office.acHours * values.office.ac
-    + state.office.heaterHours * values.office.heater
-    + Math.floor(state.office.printingPages / 5) * values.office.printingPer5;
-  const lunchTotal = Object.entries(state.lunch).reduce((sum, [key, checked]) => {
-    return sum + (checked ? values.lunch[key] : 0);
-  }, 0);
-  const dinnerFoodTotal = Object.entries(state.dinner.food).reduce((sum, [key, checked]) => {
-    return sum + (checked ? values.dinnerFood[key] : 0);
-  }, 0);
-  const wasteTotal = values.waste[state.waste] || 0;
+  // Use cached value if available
+  if (cachedTotals) return cachedTotals;
 
-  return {
-    shower: values.shower[state.shower],
-    breakfast: breakfastTotal,
-    appliances: appliancesTotal,
-    commute: values.commute[state.commute],
-    office: officeTotal,
-    lunch: lunchTotal,
-    shopping: values.shopping[state.shopping],
-    dinner: values.dinnerCooking[state.dinner.cooking] + dinnerFoodTotal,
-    tv: parseDurationToHours(state.tvDuration) * values.tv,
-    waste: wasteTotal,
-  };
+  try {
+    const totals = {
+      shower: CARBON_VALUES.shower[appState.shower] || 0,
+      breakfast: sumBooleanValues(appState.breakfast, CARBON_VALUES.breakfast),
+      appliances:
+        parseDurationToHours(appState.appliances.fanDuration) * CARBON_VALUES.appliances.fan +
+        parseDurationToHours(appState.appliances.lightDuration) * CARBON_VALUES.appliances.light +
+        (parseDurationToMinutes(appState.appliances.microwaveDuration) / 10) * CARBON_VALUES.appliances.microwave +
+        (parseDurationToMinutes(appState.appliances.kettleDuration) / 10) * CARBON_VALUES.appliances.kettle,
+      commute: CARBON_VALUES.commute[appState.commute] || 0,
+      office:
+        (appState.office.computer ? CARBON_VALUES.office.computer : 0) +
+        (appState.office.internet ? CARBON_VALUES.office.internet : 0) +
+        (appState.office.coffee ? CARBON_VALUES.office.coffee : 0) +
+        parseDurationToHours(appState.office.acDuration) * CARBON_VALUES.office.ac +
+        parseDurationToHours(appState.office.heaterDuration) * CARBON_VALUES.office.heater +
+        Math.floor(appState.office.printingPages / CONFIG.printingPageStep) * CARBON_VALUES.office.printingPer5,
+      lunch: sumBooleanValues(appState.lunch, CARBON_VALUES.lunch),
+      shopping: CARBON_VALUES.shopping[appState.shopping] || 0,
+      dinner:
+        (CARBON_VALUES.dinnerCooking[appState.dinner.cooking] || 0) +
+        sumBooleanValues(appState.dinner.food, CARBON_VALUES.dinnerFood),
+      tv: parseDurationToHours(appState.tvDuration) * CARBON_VALUES.tv,
+      waste: CARBON_VALUES.waste[appState.waste] || 0,
+    };
+
+    // Validate all values are numbers
+    Object.entries(totals).forEach(([key, value]) => {
+      if (typeof value !== 'number' || isNaN(value)) {
+        console.warn(`Invalid total for ${key}:`, value);
+        totals[key] = 0;
+      }
+    });
+
+    cachedTotals = totals;
+    return totals;
+  } catch (e) {
+    console.error('Error computing totals:', e);
+    return Object.fromEntries(Object.keys(computeTotals.stub || {}).map((key) => [key, 0]));
+  }
 }
 
+// Stub for error handling
+computeTotals.stub = CARBON_VALUES;
+
+/**
+ * Sum up boolean-selected values
+ * @param {object} selection - Boolean object
+ * @param {object} values - Carbon value map
+ * @returns {number} Total carbon value
+ */
+function sumBooleanValues(selection, values) {
+  return Object.entries(selection).reduce((sum, [key, checked]) => {
+    return sum + (checked && values[key] ? values[key] : 0);
+  }, 0);
+}
+
+// ============================================================================
+// REPORTING & ENDINGS
+// ============================================================================
+
+/**
+ * Determine ending based on total carbon footprint
+ * @param {number} total - Total CO2e in kg
+ * @returns {object} Ending info with title and message
+ */
 function getEnding(total) {
-  if (total <= 8) {
-    const title = state.character === 'female' ? 'Green Woman' : 'Green Man';
-    return {
-      title,
-      message: 'Excellent! Your choices helped reduce environmental impact and promote sustainable living.',
-    };
+  try {
+    const hero = ENDINGS.greenHero(appState.character === 'female');
+    if (total <= hero.threshold) return hero;
+    if (total <= ENDINGS.ecoLearner.threshold) return ENDINGS.ecoLearner;
+    return ENDINGS.carbonLover;
+  } catch (e) {
+    console.error('Error determining ending:', e);
+    return { title: 'Error', message: 'Unable to calculate results.' };
   }
-  if (total <= 15) {
-    return {
-      title: 'Eco Learner',
-      message: 'Good effort! You understand sustainability, but there is still room for improvement.',
-    };
-  }
-  return {
-    title: 'Carbon Lover',
-    message: 'Your lifestyle generated a high carbon footprint today. Try greener alternatives next time.',
-  };
 }
 
+/**
+ * Render the final carbon report
+ */
 function renderReport() {
-  const totals = computeTotals();
-  const totalValue = Object.values(totals).reduce((sum, value) => sum + value, 0);
-  reportBreakdown.innerHTML = Object.entries(totals)
-    .map(([label, value]) => {
-      const labelText = label
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, (str) => str.toUpperCase());
-      return `<div class="report-item"><span>${labelText}</span><strong>${value.toFixed(2)} kg</strong></div>`;
-    })
-    .join('');
-  reportTotal.textContent = `${totalValue.toFixed(2)} kg`;
-  const ending = getEnding(totalValue);
-  endingMessage.innerHTML = `<strong>${ending.title}</strong><p>${ending.message}</p>`;
+  try {
+    const totals = computeTotals();
+    const totalValue = Object.values(totals).reduce((sum, val) => sum + (val || 0), 0);
+
+    // Build report breakdown
+    const reportHtml = Object.entries(totals)
+      .map(([label, value]) => {
+        const safeLabel = escapeHtml(formatLabel(label));
+        const safeValue = parseFloat(value).toFixed(CONFIG.decimalPlaces);
+        return `<div class="report-item"><span>${safeLabel}</span><strong>${safeValue} kg</strong></div>`;
+      })
+      .join('');
+
+    DOM.elements.reportBreakdown.innerHTML = reportHtml;
+    DOM.elements.reportTotal.textContent = `${totalValue.toFixed(CONFIG.decimalPlaces)} kg`;
+
+    // Get and display ending
+    const ending = getEnding(totalValue);
+    const endingHtml = `<strong>${escapeHtml(ending.title)}</strong><p>${escapeHtml(ending.message)}</p>`;
+    DOM.elements.endingMessage.innerHTML = endingHtml;
+  } catch (e) {
+    console.error('Error rendering report:', e);
+    DOM.elements.endingMessage.innerHTML = '<strong>Error</strong><p>Unable to generate report. Please refresh the page.</p>';
+  }
 }
 
+// ============================================================================
+// NAVIGATION
+// ============================================================================
+
+/**
+ * Show a specific screen
+ * @param {string} name - Screen name
+ */
+function showScreen(name) {
+  if (!DOM.screens[name]) {
+    console.error('Unknown screen:', name);
+    return;
+  }
+
+  Object.values(DOM.screens).forEach((screen) => screen.classList.remove('active'));
+  DOM.screens[name].classList.add('active');
+}
+
+/**
+ * Navigate to a specific stage
+ * @param {number} index - Stage index
+ */
 function goToStage(index) {
-  currentStageIndex = Math.min(Math.max(index, 0), stages.length - 1);
+  currentStageIndex = Math.min(Math.max(index, 0), STAGES.length - 1);
   renderStage();
 }
 
+/**
+ * Move to next stage or finish
+ */
 function nextStage() {
-  if (currentStageIndex < stages.length - 1) {
-    readStageValues();
+  readStageValues();
+
+  if (currentStageIndex < STAGES.length - 1) {
     goToStage(currentStageIndex + 1);
   } else {
-    readStageValues();
     renderReport();
     showScreen('report');
   }
 }
 
+/**
+ * Move to previous stage
+ */
 function prevStage() {
   if (currentStageIndex > 0) {
     goToStage(currentStageIndex - 1);
   }
 }
 
-function setupEventListeners() {
-  document.querySelectorAll('.character-btn').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.character = button.dataset.character;
-      showScreen('stage');
-      goToStage(0);
-    });
-  });
-  prevBtn.addEventListener('click', (event) => {
-    event.preventDefault();
-    prevStage();
-  });
-  nextBtn.addEventListener('click', (event) => {
-    event.preventDefault();
-    nextStage();
-  });
-  restartBtn.addEventListener('click', () => {
-    showScreen('start');
-    goToStage(0);
-  });
+/**
+ * Reset game to initial state
+ */
+function resetGame() {
+  appState = JSON.parse(JSON.stringify(INITIAL_STATE));
+  currentStageIndex = 0;
+  cachedTotals = null;
+  showScreen('start');
 }
 
-setupEventListeners();
-renderStage();
-showScreen('start');
+// ============================================================================
+// EVENT HANDLING & INITIALIZATION
+// ============================================================================
+
+/**
+ * Initialize event listeners for the entire application
+ */
+function setupEventListeners() {
+  try {
+    // Character selection
+    document.querySelectorAll('.character-btn').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        const character = button.dataset.character;
+        if (!character) {
+          console.error('Character button missing data-character');
+          return;
+        }
+        appState.character = character;
+        showScreen('stage');
+        goToStage(0);
+      });
+    });
+
+    // Navigation buttons
+    DOM.elements.prevBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      prevStage();
+    });
+
+    DOM.elements.nextBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      nextStage();
+    });
+
+    DOM.elements.restartBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      resetGame();
+    });
+  } catch (e) {
+    console.error('Error setting up event listeners:', e);
+  }
+}
+
+/**
+ * Initialize the application
+ */
+function initializeApp() {
+  try {
+    validateDOM();
+    setupEventListeners();
+    renderStage();
+    showScreen('start');
+    console.log('Carbon Footprint Simulator initialized successfully');
+  } catch (e) {
+    console.error('Failed to initialize application:', e);
+    document.body.innerHTML = '<p style="padding: 20px; color: red;">Failed to load application. Please refresh the page.</p>';
+  }
+}
+
+// Start the application when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  initializeApp();
+}
