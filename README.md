@@ -134,12 +134,14 @@ Player may choose multiple items.
 
 ## C. Home Appliances
 
-| Appliance          | Carbon Value |
-| ------------------ | ------------ |
-| Fan (1 hr)         | 0.05 kg      |
-| Light (1 hr)       | 0.02 kg      |
-| Microwave (10 min) | 0.12 kg      |
-| Kettle             | 0.10 kg      |
+In the app, time-based options are available for appliance usage. You can enter durations using hh:mm:ss.
+
+| Appliance               | Carbon Value |
+| ----------------------- | ------------ |
+| Fan (per hour)          | 0.05 kg      |
+| Light (per hour)        | 0.02 kg      |
+| Microwave (per 10 min)  | 0.12 kg      |
+| Kettle (per 10 min)     | 0.10 kg      |
 
 ---
 
@@ -181,6 +183,8 @@ Player may choose multiple items.
 | -------- | ------------ |
 | Per Hour | 0.60 kg      |
 
+Use the app to enter how long the air conditioner runs during office hours with hh:mm:ss.
+
 ---
 
 ## Heater
@@ -188,6 +192,8 @@ Player may choose multiple items.
 | Duration | Carbon Value |
 | -------- | ------------ |
 | Per Hour | 1.00 kg      |
+
+Use the app to enter how long the heater runs during office hours with hh:mm:ss.
 
 ---
 
@@ -258,9 +264,11 @@ Random event during the day.
 
 # 11. Television
 
-| Activity           | Carbon Value |
-| ------------------ | ------------ |
-| Watching TV (1 hr) | 0.08 kg      |
+| Activity                 | Carbon Value |
+| ------------------------ | ------------ |
+| Watching TV (per hour)   | 0.08 kg      |
+
+The app allows entering TV duration with hh:mm:ss.
 
 ---
 

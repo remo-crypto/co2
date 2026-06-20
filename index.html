@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carbon Footprint Simulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <h1>Carbon Footprint Simulator</h1>
+        <p>Live a day in the life of an office employee and learn how your choices affect your carbon footprint.</p>
+      </div>
+    </header>
+
+    <main>
+      <section id="screen-start" class="screen active">
+        <div class="card">
+          <h2>Choose Your Character</h2>
+          <p class="small">The characters are cosmetic only. Gameplay is the same for both.</p>
+          <div class="character-grid">
+            <button class="character-btn" data-character="male">Male</button>
+            <button class="character-btn" data-character="female">Female</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-stage" class="screen">
+        <div class="card">
+          <div class="stage-header">
+            <div class="stage-progress">Step <span id="current-step">1</span> / <span id="total-step">12</span></div>
+            <h2 id="stage-title">Stage Title</h2>
+          </div>
+          <p id="stage-description" class="stage-description"></p>
+          <form id="stage-form" class="stage-form"></form>
+          <div class="navigation-row">
+            <button id="prev-btn" class="secondary">Back</button>
+            <button id="next-btn">Next</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screen-report" class="screen">
+        <div class="card report-card">
+          <div class="report-header">
+            <h2>Daily Carbon Report</h2>
+            <p>Review your daily choices, total CO₂ emissions, and your sustainability title.</p>
+          </div>
+          <div id="report-breakdown" class="report-breakdown"></div>
+          <div class="report-total-row">
+            <span>Total CO₂e</span>
+            <strong id="report-total">0.00 kg</strong>
+          </div>
+          <div id="ending-message" class="ending-message"></div>
+          <button id="restart-btn">Play Again</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
