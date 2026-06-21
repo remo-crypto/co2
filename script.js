@@ -45,6 +45,23 @@ const ENDINGS = {
   },
 };
 
+/**
+ * Deep freeze an object so runtime changes cannot mutate configuration values.
+ * @param {object} obj - Object to freeze
+ * @returns {object} Frozen object
+ */
+function deepFreeze(obj) {
+  if (obj && typeof obj === 'object' && !Object.isFrozen(obj)) {
+    Object.freeze(obj);
+    Object.values(obj).forEach((value) => deepFreeze(value));
+  }
+  return obj;
+}
+
+deepFreeze(CONFIG);
+deepFreeze(CARBON_VALUES);
+deepFreeze(ENDINGS);
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -129,8 +146,29 @@ function getSafeFormValue(form, name, defaultValue) {
  */
 function validateNumber(value, min = 0, max = Infinity, defaultValue = 0) {
   const num = Number(value);
-  if (isNaN(num)) return defaultValue;
+  if (Number.isNaN(num)) return defaultValue;
   return Math.min(Math.max(num, min), max);
+}
+
+/**
+ * Normalize a value to a safe HTML attribute string
+ * @param {any} value - Value to normalize
+ * @returns {string} Normalized string
+ */
+function normalizeAttribute(value) {
+  return escapeHtml(String(value ?? ''));
+}
+
+/**
+ * Clone a value safely for application state
+ * @param {any} value - Value to clone
+ * @returns {any} Deep clone of the value
+ */
+function cloneValue(value) {
+  if (window.structuredClone) {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value));
 }
 
 /**
@@ -180,7 +218,16 @@ function validateDOM() {
   }
 }
 
-const INITIAL_STATE = {
+/**
+ * Get a checkbox or radio input checked state safely
+ * @param {string} name - Input name
+ * @returns {boolean} Checked state
+ */
+function getCheckedState(name) {
+  return DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`)?.checked || false;
+}
+
+const INITIAL_STATE = deepFreeze({
   character: 'male',
   shower: 'cold',
   breakfast: { toast: false, eggs: false, coffee: false, rice: false },
@@ -204,9 +251,9 @@ const INITIAL_STATE = {
   dinner: { cooking: 'home', food: { vegetables: false, rice: false, chicken: false, packaged: false } },
   tvDuration: '00:00:00',
   waste: 'segregated',
-};
+});
 
-let appState = { ...INITIAL_STATE };
+let appState = cloneValue(INITIAL_STATE);
 let currentStageIndex = 0;
 let cachedTotals = null;
 
@@ -259,11 +306,13 @@ function createOptionCard(option, inputHtml) {
 function createInputOptions(options, type, currentValue, groupName = '') {
   return options
     .map((option) => {
-      const value = escapeHtml(option.value || option.name);
-      const inputName = type === 'radio' ? escapeHtml(groupName || option.name || 'option') : escapeHtml(option.name || value || 'option');
+      const value = escapeHtml(option.value || option.name || 'option');
+      const inputName = type === 'radio'
+        ? escapeHtml(groupName || option.name || option.value || 'option')
+        : escapeHtml(option.name || value || 'option');
       const checked = type === 'radio'
         ? (currentValue === value ? 'checked' : '')
-        : (currentValue[value] ? 'checked' : '');
+        : (currentValue && currentValue[value] ? 'checked' : '');
 
       const inputHtml = `<input type="${type}" name="${inputName}" value="${value}" ${checked} ${type === 'radio' ? 'required' : ''}>`;
       return createOptionCard(option, inputHtml);
@@ -281,11 +330,11 @@ function createInputOptions(options, type, currentValue, groupName = '') {
  */
 function createTimeInput(label, name, value, hint = '') {
   const safeLabel = escapeHtml(label);
-  const safeValue = escapeHtml(value);
+  const safeValue = normalizeAttribute(value);
   const safeHint = escapeHtml(hint);
   return `
     <label>${safeLabel}
-      <input type="time" name="${escapeHtml(name)}" step="1" value="${safeValue}" min="00:00:00" max="04:00:00">
+      <input type="time" name="${normalizeAttribute(name)}" step="1" value="${safeValue}" min="00:00:00" max="04:00:00">
       ${safeHint ? `<span class="small">${safeHint}</span>` : ''}
     </label>
   `;
@@ -303,11 +352,12 @@ function createNumberInput(label, name, value, options = {}) {
   const safeLabel = escapeHtml(label);
   const min = validateNumber(options.min, 0);
   const step = validateNumber(options.step, 1);
+  const safeValue = normalizeAttribute(value);
   const safeHint = options.hint ? escapeHtml(options.hint) : '';
   
   return `
     <label>${safeLabel}
-      <input type="number" name="${escapeHtml(name)}" min="${min}" step="${step}" value="${value}" placeholder="0">
+      <input type="number" name="${normalizeAttribute(name)}" min="${min}" step="${step}" value="${safeValue}" placeholder="0">
       ${safeHint ? `<span class="small">${safeHint}</span>` : ''}
     </label>
   `;
@@ -477,7 +527,7 @@ function renderStageContent(stage) {
         { value: 'mixed', label: 'Mixed Waste', detail: '0.50 kg CO₂e' },
         { value: 'excess', label: 'Excess Food Waste', detail: '1.00 kg CO₂e' },
       ];
-      const inputs = createInputOptions(options, 'radio', appState.waste);
+      const inputs = createInputOptions(options, 'radio', appState.waste, 'waste');
       return `<div class="field-group"><p>${escapeHtml(suggestion)}</p></div>
         <div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
@@ -509,10 +559,9 @@ function readStageValues() {
         appState.shower = getSafeFormValue(form, 'shower', appState.shower);
         break;
 
-      case 'breakfast':
+          case 'breakfast':
         Object.keys(appState.breakfast).forEach((name) => {
-          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
-          if (el) appState.breakfast[name] = el.checked;
+          appState.breakfast[name] = getCheckedState(name);
         });
         break;
 
@@ -538,8 +587,7 @@ function readStageValues() {
 
       case 'lunch':
         Object.keys(appState.lunch).forEach((name) => {
-          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
-          if (el) appState.lunch[name] = el.checked;
+          appState.lunch[name] = getCheckedState(name);
         });
         break;
 
@@ -550,8 +598,7 @@ function readStageValues() {
       case 'dinner':
         appState.dinner.cooking = getSafeFormValue(form, 'dinnerCooking', appState.dinner.cooking);
         Object.keys(appState.dinner.food).forEach((name) => {
-          const el = DOM.elements.stageForm.querySelector(`input[name="${escapeHtml(name)}"]`);
-          if (el) appState.dinner.food[name] = el.checked;
+          appState.dinner.food[name] = getCheckedState(name);
         });
         break;
 
@@ -747,7 +794,7 @@ function prevStage() {
  * Reset game to initial state
  */
 function resetGame() {
-  appState = JSON.parse(JSON.stringify(INITIAL_STATE));
+  appState = cloneValue(INITIAL_STATE);
   currentStageIndex = 0;
   cachedTotals = null;
   showScreen('start');

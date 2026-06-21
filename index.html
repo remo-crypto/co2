@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none';">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <meta name="description" content="Carbon Footprint Simulator: Learn how your daily choices impact the environment in this educational game.">
   <meta name="theme-color" content="#2a7a53">
@@ -24,8 +25,8 @@
           <h2>Choose Your Character</h2>
           <p class="small">The characters are cosmetic only. Gameplay is the same for both.</p>
           <div class="character-grid">
-            <button class="character-btn" data-character="male">Male</button>
-            <button class="character-btn" data-character="female">Female</button>
+            <button type="button" class="character-btn" data-character="male">Male</button>
+            <button type="button" class="character-btn" data-character="female">Female</button>
           </div>
         </div>
       </section>
@@ -39,8 +40,8 @@
           <p id="stage-description" class="stage-description"></p>
           <form id="stage-form" class="stage-form"></form>
           <div class="navigation-row">
-            <button id="prev-btn" class="secondary">Back</button>
-            <button id="next-btn">Next</button>
+            <button type="button" id="prev-btn" class="secondary">Back</button>
+            <button type="button" id="next-btn">Next</button>
           </div>
         </div>
       </section>
@@ -56,8 +57,8 @@
             <span>Total CO₂e</span>
             <strong id="report-total">0.00 kg</strong>
           </div>
-          <div id="ending-message" class="ending-message"></div>
-          <button id="restart-btn">Play Again</button>
+          <div id="ending-message" class="ending-message" aria-live="polite"></div>
+          <button type="button" id="restart-btn">Play Again</button>
         </div>
       </section>
     </main>
