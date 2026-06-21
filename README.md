@@ -23,6 +23,14 @@ Educational Simulation / Decision-Making Game
 
 * Web Browser (Desktop & Mobile)
 
+### Requirements
+
+* Modern browser with JavaScript enabled
+* Responsive experience for desktop and mobile devices
+* Static hosting environment (no backend required)
+* Optional internet connection for live deployment and updates
+* Recommended viewport width: 360px or larger
+
 ### Game Duration
 
 * **1 in-game day = 2–3 minutes in real life**

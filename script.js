@@ -256,15 +256,16 @@ function createOptionCard(option, inputHtml) {
  * @param {string} currentValue - Currently selected value(s)
  * @returns {string} Safe HTML string
  */
-function createInputOptions(options, type, currentValue) {
+function createInputOptions(options, type, currentValue, groupName = '') {
   return options
     .map((option) => {
       const value = escapeHtml(option.value || option.name);
-      const checked = type === 'radio' 
+      const inputName = type === 'radio' ? escapeHtml(groupName || option.name || 'option') : escapeHtml(option.name || value || 'option');
+      const checked = type === 'radio'
         ? (currentValue === value ? 'checked' : '')
         : (currentValue[value] ? 'checked' : '');
-      
-      const inputHtml = `<input type="${type}" name="${escapeHtml(option.name || 'option')}" value="${value}" ${checked} required>`;
+
+      const inputHtml = `<input type="${type}" name="${inputName}" value="${value}" ${checked} ${type === 'radio' ? 'required' : ''}>`;
       return createOptionCard(option, inputHtml);
     })
     .join('');
@@ -367,7 +368,7 @@ function renderStageContent(stage) {
         { value: 'cold', label: 'Cold Shower', detail: '0.05 kg CO₂e' },
         { value: 'hot', label: 'Hot Shower', detail: '0.80 kg CO₂e' },
       ];
-      const inputs = createInputOptions(options, 'radio', appState.shower);
+      const inputs = createInputOptions(options, 'radio', appState.shower, 'shower');
       return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
 
@@ -400,7 +401,7 @@ function renderStageContent(stage) {
         { value: 'bicycle', label: 'Bicycle', detail: '0.00 kg CO₂e' },
         { value: 'walking', label: 'Walking', detail: '0.00 kg CO₂e' },
       ];
-      const inputs = createInputOptions(options, 'radio', appState.commute);
+      const inputs = createInputOptions(options, 'radio', appState.commute, 'commute');
       return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
 
@@ -437,7 +438,7 @@ function renderStageContent(stage) {
         { value: 'clothing', label: 'New Clothing', detail: '2.00 kg CO₂e' },
         { value: 'gadget', label: 'Electronic Gadget', detail: '15.00 kg CO₂e' },
       ];
-      const inputs = createInputOptions(options, 'radio', appState.shopping);
+      const inputs = createInputOptions(options, 'radio', appState.shopping, 'shopping');
       return `<div class="option-group"><div class="option-row">${inputs}</div></div>`;
     }
 
@@ -453,7 +454,7 @@ function renderStageContent(stage) {
         { name: 'chicken', label: 'Chicken', detail: '1.60 kg CO₂e' },
         { name: 'packaged', label: 'Packaged Food', detail: '2.00 kg CO₂e' },
       ];
-      const cookingInputs = createInputOptions(cookingOptions, 'radio', appState.dinner.cooking);
+      const cookingInputs = createInputOptions(cookingOptions, 'radio', appState.dinner.cooking, 'dinnerCooking');
       const foodInputs = createInputOptions(foodOptions, 'checkbox', appState.dinner.food);
       return `<div class="option-group"><div class="option-row">${cookingInputs}</div></div>
         <div class="option-group"><div class="option-row">${foodInputs}</div></div>`;
